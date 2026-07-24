@@ -4,7 +4,7 @@ import { battleTypes, eff, norm, cho, search } from '../core/type-system.js';
 import { defenseProfile } from '../core/defense-engine.js';
 import { abilityContext, abilitySummary, abilityImpact, bestAbilityMove, canSwitchOutAgainst } from '../core/ability-engine.js';
 import { profile, bestFor, gradeBadge, matchupGrade, directGrade, axisGapForCombo } from '../core/matchup-engine-v2.js';
-import { inferMega, estimateOpponent, scenarioMegaForLead, scenarioMegaForPokemon, rankFMPlans, forcedLeadPlanScore, leadFirstAction, leadReason, leadConfidence, leadCounterPlan, withJosa, objectJosa, turnLine, planMode, likelyBackPlan, scenarioWinAxis, orderCombo } from '../core/selection-engine-v2.js';
+import { inferMega, estimateOpponent, scenarioMegaForLead, scenarioMegaForPokemon, rankFMPlans, forcedLeadPlanScore, leadFirstAction, leadReason, leadConfidence, leadCounterPlan, withJosa, objectJosa, turnLine, planMode, likelyBackPlan, scenarioWinAxis, orderCombo } from '../core/selection-engine-v3.js';
 import { enemyMoveScenariosV42, exchangeAudit, speedProfileV42 } from '../core/speed-engine.js';
 import { formatDefenseAxis as defenseAxisText } from './formatters.js';
 

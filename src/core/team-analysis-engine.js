@@ -45,7 +45,7 @@ export function inferPokemonRoles(p,megaName=''){
   if(hasMove(moves,ROLE_MOVES.removal))addRole(roles,evidence,'hazardRemover',.78,moves.filter(x=>ROLE_MOVES.removal.has(x)).join('·'));
   if(hasMove(moves,ROLE_MOVES.pivot)||tags.includes('pivot'))addRole(roles,evidence,'pivot',tags.includes('pivot')?.78:.65,moves.filter(x=>ROLE_MOVES.pivot.has(x)).join('·'));
   if(abilities.has('regenerator'))addRole(roles,evidence,'regenerator',.92,'재생력');
-  if(hasMove(moves,ROLE_MOVES.trap)||abilities.has('shadow-tag')||abilities.has('arena-trap'))addRole(roles,evidence,'trapper',abilities.has('shadow-tag')||abilities.has('arena-trap')?.95:.68,'교체 억제');
+  if(hasMove(moves,ROLE_MOVES.trap)||abilities.has('shadow-tag')||abilities.has('arena-trap'))addRole(roles,evidence,'trapper',(abilities.has('shadow-tag')||abilities.has('arena-trap'))?.95:.68,'교체 억제');
   if(hasMove(moves,ROLE_MOVES.antiSetup)||abilities.has('unaware'))addRole(roles,evidence,'antiSetup',abilities.has('unaware')?.94:.72,moves.filter(x=>ROLE_MOVES.antiSetup.has(x)).join('·')||'천진');
   if(hasMove(moves,ROLE_MOVES.phaze))addRole(roles,evidence,'phazer',.78,moves.filter(x=>ROLE_MOVES.phaze.has(x)).join('·'));
   if(hasMove(moves,ROLE_MOVES.protect))addRole(roles,evidence,'protector',.64,moves.filter(x=>ROLE_MOVES.protect.has(x)).join('·'));
