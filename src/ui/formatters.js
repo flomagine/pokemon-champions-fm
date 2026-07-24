@@ -1,6 +1,6 @@
 
 import { MEGA_STATS_V43 } from '../data/meta-data.js';
-import { defenseAxisText as baseDefenseAxisText } from '../core/defense-engine.js';
+import { defenseAxisText as baseDefenseAxisText } from '../core/defense-engine-v2.js';
 import { speedProfileV42 } from '../core/speed-engine.js';
 
 export function formatDefenseAxis(p,megaName=''){
