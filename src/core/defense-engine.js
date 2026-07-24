@@ -2,7 +2,12 @@ import { DATA } from '../data/pokemon-data.js';
 import { DEFENSE_META, DEFENSE_HINTS, MEGA_DEFENSE_META, AXIS_LABEL, MEGA_STATS_V43 } from '../data/meta-data.js';
 import { battleTypes } from './type-system.js';
 
+const CURRENT_DEFENSE_OVERRIDES=Object.freeze({
+ '찌리배리':{kind:'specialWall',label:'특수막이＋회복·맹독',recommendation:'physical',confidence:'높음',nature:'차분 73.8%',ev:'HP31 / 방어4 / 특방28 / 스피드3 30.8%',updated:'2026-07-24 11:30 KST',note:'물붓기 93.7%, 게으름피우기 90.6%, 맹독 83.0%가 동시에 주류다. 단순 물리축 보유가 아니라 회복량을 넘는 물리 땅 타점이 있는지를 검사한다.',source:'OP.GG Pokémon Champions M-B 싱글 최신 표본'}
+});
+
 export function defenseProfile(p,megaName=''){
+ const current=!megaName&&CURRENT_DEFENSE_OVERRIDES[p.name];if(current)return{...current};
  const exact=(megaName&&MEGA_DEFENSE_META[megaName])||DEFENSE_META[p.name];if(exact)return{...exact,source:'OP.GG M-B 싱글 성격·노력치 또는 메가 수동 검증'};
  if(megaName&&typeof MEGA_STATS_V43!=='undefined'&&MEGA_STATS_V43[megaName]){
   const s=MEGA_STATS_V43[megaName],gap=s.def-s.spd,high=Math.max(s.def,s.spd),low=Math.min(s.def,s.spd);let kind='offense',label='공격형·분배 미확인',recommendation='either',note='성격·노력치 표본이 충분하지 않아 종족값만으로 막이 방향을 확정하지 않는다.';
@@ -34,11 +39,10 @@ export function defenseAxisText(p,megaName=''){
  return `<span class="axisbadge ${axisClass(d)}">${d.label}</span><span class="axisbadge ${d.recommendation==='physical'?'axis-physical':d.recommendation==='special'?'axis-special':'axis-variable'}">${rec}</span><div class="axisdetail"><b>성격:</b> ${d.nature}<br><b>노력치:</b> ${d.ev}<br><b>신뢰:</b> ${d.confidence} · ${d.updated}<br>${d.note}</div>`;
 }
 
-
 export class DefenseEngine {
-  profile(...args){ return defenseProfile(...args); }
-  axisMultiplier(...args){ return axisMultiplier(...args); }
-  axisClass(...args){ return axisClass(...args); }
-  describe(...args){ return defenseAxisText(...args); }
+ profile(...args){ return defenseProfile(...args); }
+ axisMultiplier(...args){ return axisMultiplier(...args); }
+ axisClass(...args){ return axisClass(...args); }
+ describe(...args){ return defenseAxisText(...args); }
 }
 export const defenseEngine = new DefenseEngine();
