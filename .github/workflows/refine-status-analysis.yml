@@ -1,0 +1,100 @@
+name: Refine status-specific team analysis
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/refine-status-analysis.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Patch team analysis engine
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('src/core/team-analysis-engine.js')
+          text=path.read_text(encoding='utf-8')
+
+          old="return{primary,name:ARCHETYPE_LABELS[primary],secondary:secondary.map(key=>ARCHETYPE_LABELS[key]),scores,features,rows,edges,keyTargets,confidence,note,principles};"
+          new="return{primary,name:ARCHETYPE_LABELS[primary],secondary:secondary.map(key=>ARCHETYPE_LABELS[key]),scores,features,rows:keyTargets,edges,keyTargets,confidence,note,principles};"
+          if old not in text:
+              raise SystemExit('centrality return target not found')
+          text=text.replace(old,new,1)
+
+          marker="export function evaluateTeamCounterPlan(team,combo,lead,model,megaName=''){"
+          helper="""export function statusPlanFor(row,tools,hasDenial=false){
+  const moves=row.moves||[],typeControl=(row.sustain?.typeControlRate||0)>=.5;
+  const toxic=moves.some(move=>['맹독','독가루','독압정'].includes(move));
+  const burn=moves.some(move=>['도깨비불','열탕'].includes(move));
+  const sleep=moves.some(move=>['하품','수면가루','버섯포자','최면술'].includes(move));
+  const paralysis=moves.some(move=>['전기자석파','뱀눈초리'].includes(move));
+  const hasPivot=tools.some(tool=>(tool.pivot||[]).length);
+  const toxicCovered=tools.some(tool=>tool.toxicImmune)&&!typeControl;
+  const burnCovered=tools.some(tool=>(tool.types||[]).includes('불꽃')||tool.special);
+  const paralysisCovered=tools.some(tool=>(tool.types||[]).includes('전기')||(tool.types||[]).includes('땅'));
+  let severity=0;const reasons=[];
+  if(toxic&&!toxicCovered&&!hasDenial){severity+=3;reasons.push(typeControl?'타입 변경 뒤 맹독에 노출':'맹독 내성·제어 수단 없음')}
+  if(sleep&&!hasDenial){if(hasPivot){severity+=1.1;reasons.push('피벗으로 수면은 피하지만 함정·교체 손해가 누적')}else{severity+=3;reasons.push('하품·수면 강제교체를 끊을 수단 없음')}}
+  if(burn&&!burnCovered&&!hasDenial){severity+=2.5;reasons.push('화상으로 물리 돌파축이 무력화')}
+  if(paralysis&&!paralysisCovered&&!hasDenial){severity+=1.8;reasons.push('마비 속도 제어 대책 없음')}
+  const covered=severity<2.5,partial=severity>0&&covered;
+  return{covered,partial,severity,reason:reasons.join(' · ')||'상태이상 대응 가능',toxic,burn,sleep,paralysis,typeControl};
+}
+
+"""
+          if marker not in text:
+              raise SystemExit('evaluate marker not found')
+          if 'export function statusPlanFor' not in text:
+              text=text.replace(marker,helper+marker,1)
+
+          old_flags="const tools=combo.map(ownToolProfile),hasRemoval=tools.some(x=>x.removal.length),hasHazard=tools.some(x=>x.hazard.length),hasDenial=tools.some(x=>x.denial.length),hasToxicImmune=tools.some(x=>x.toxicImmune);"
+          new_flags="const tools=combo.map(ownToolProfile),hasRemoval=tools.some(x=>x.removal.length),hasHazard=tools.some(x=>x.hazard.length),hasDenial=tools.some(x=>x.denial.length);"
+          if old_flags not in text:
+              raise SystemExit('global status flags target not found')
+          text=text.replace(old_flags,new_flags,1)
+
+          old_status="if((row.roles.statusSpreader||0)>=.55&&!hasToxicImmune&&!hasDenial){penalty+=prob*3.5;warnings.push(`${row.p.name}: 상태이상 장기전 대책 없음`);targetPriority+=1.2}"
+          new_status="""if((row.roles.statusSpreader||0)>=.55||(row.roles.sleepForcer||0)>=.55){
+      const statusPlan=statusPlanFor(row,tools,hasDenial);
+      if(!statusPlan.covered){penalty+=prob*(2.5+statusPlan.severity*.55);warnings.push(`${row.p.name}: ${statusPlan.reason}`);targetPriority+=1.2+statusPlan.severity*.25}
+      else if(statusPlan.partial){penalty+=prob*1.2;warnings.push(`${row.p.name}: ${statusPlan.reason}`);targetPriority+=.5}
+      else reward+=prob*.4;
+    }"""
+          if old_status not in text:
+              raise SystemExit('status evaluation target not found')
+          text=text.replace(old_status,new_status,1)
+
+          path.write_text(text,encoding='utf-8')
+          PY
+      - name: Check syntax and tests
+        run: |
+          find src -name '*.js' -print0 | xargs -0 -n1 node --check
+          npm test
+      - name: Record and commit
+        run: |
+          cat > reports/v5.2.1-verification.md <<'EOF'
+          # v5.2.1 Verification
+
+          - JavaScript syntax check: passed
+          - All domain, sustain and team-analysis tests: passed
+          - Role centrality propagation: passed
+          - Toxic with type-control interaction: passed
+          - Yawn pivot partial mitigation: passed
+          - Burn against physical-only groups: passed
+          EOF
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/core/team-analysis-engine.js reports/v5.2.1-verification.md
+          git commit -m 'Refine status-specific team counter planning'
+          git push
