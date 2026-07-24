@@ -5,6 +5,6 @@ import { installTeamPlanDecorator } from './ui/team-plan-decorator.js';
 
 configureCombatAudit(speedEngine);
 const app = new SimulatorApp();
-window.PokemonChampionsFM = { app, version: '5.2.0-team-analysis' };
+window.PokemonChampionsFM = { app, version: '5.2.1-team-analysis' };
 app.bootstrap();
 installTeamPlanDecorator();
