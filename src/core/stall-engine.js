@@ -1,5 +1,5 @@
 import { DATA, OWN } from '../data/pokemon-data.js';
-import { defenseProfile } from './defense-engine.js';
+import { defenseProfile } from './defense-engine-v2.js';
 import { moveAbilityScore } from './ability-engine.js';
 import { STALL_META, RELIABLE_RECOVERY_MOVES, DRAIN_RECOVERY_MOVES, CLOCK_MOVES, ANTI_STALL_MOVES } from '../data/stall-data.js';
 
@@ -70,16 +70,18 @@ export function sustainAssessment(p,id,megaName='',context={}){
   const moveResult=context.moveResult||moveAbilityScore(p,id,context.move||own.moves?.[0],megaName);
   const rawScore=Math.max(0,context.rawScore??moveResult.score??0);
   const tools=antiStallTools(id);
-  const immune=toxicImmune(id);
+  const nativeToxicImmune=toxicImmune(id);
+  const effectiveToxicImmune=nativeToxicImmune&&target.typeControlRate<.5;
   const cat=moveResult.meta?.cat||'status';
   const type=moveResult.meta?.type||'';
   const correctAxis=!['physical','special'].includes(def.recommendation)||cat===def.recommendation;
-  const requiredTypeOK=!target.requiredTypes.length||target.requiredTypes.includes(type);
+  const requiredTypeOK=!target.requiredTypes.length||target.requiredTypes.includes(type)||rawScore>=2.8;
   const weakness=(moveResult.base||0)>1;
   const recoveryTax=target.recoveryLoad;
-  const statusTax=target.toxicThreat&&!immune?target.statusRate*.35:target.statusRate*.1;
+  const statusTax=target.toxicThreat&&!effectiveToxicImmune?target.statusRate*.35:target.statusRate*.1;
   const controlTax=target.typeControlRate*.12+target.pivotRate*.08;
-  let adjustedScore=Math.max(0,rawScore-recoveryTax-statusTax-controlTax);
+  const stabRemovalTax=target.typeControlRate>.5&&(own.types||[]).includes(type)?.12:0;
+  let adjustedScore=Math.max(0,rawScore-recoveryTax-statusTax-controlTax-stabRemovalTax);
   if(target.reliableRate>.6&&!weakness&&!tools.some(x=>x.kind==='hardControl'))adjustedScore=Math.min(adjustedScore,.85);
   const overwhelming=rawScore>=2.55;
   const canBreak=!target.stallThreat||(
@@ -88,18 +90,20 @@ export function sustainAssessment(p,id,megaName='',context={}){
     (correctAxis||overwhelming)&&
     requiredTypeOK
   );
-  const controlTool=tools.sort((a,b)=>b.weight-a.weight)[0]||null;
+  const controlTool=tools.filter(x=>x.kind!=='setup').sort((a,b)=>b.weight-a.weight)[0]||null;
+  const setupTool=tools.find(x=>x.kind==='setup')||null;
   const canControl=!!controlTool;
   const gradeCap=!target.stallThreat?5:canBreak?target.breakGradeCap:canControl?3:2;
-  const canRepeat=canBreak&&(!target.toxicThreat||immune)&&target.typeControlRate<.45;
+  const canRepeat=canBreak&&(!target.toxicThreat||effectiveToxicImmune)&&target.typeControlRate<.45;
   let label='일반 대면';
   if(target.stallThreat&&canBreak)label=canRepeat?'지속 돌파 가능':'즉시 돌파 가능·반복 후출 불가';
   else if(target.stallThreat&&canControl)label=`${controlTool.move}로 일시 제어만 가능`;
+  else if(target.stallThreat&&setupTool)label='랭크업 가능성은 있으나 회복·상태이상 앞에서 안정 돌파 아님';
   else if(target.stallThreat)label='회복량을 넘는 실질 타점 없음';
   const note=target.stallThreat
     ?`${label}. 원시 돌파 ${rawScore.toFixed(2)} → 회복·맹독·제어 부담 반영 ${adjustedScore.toFixed(2)}. ${target.note}`
     :'';
-  return{target,moveResult,rawScore,adjustedScore,tools,controlTool,immune,correctAxis,requiredTypeOK,weakness,canBreak,canControl,canRepeat,gradeCap,label,note};
+  return{target,moveResult,rawScore,adjustedScore,tools,controlTool,setupTool,nativeToxicImmune,effectiveToxicImmune,correctAxis,requiredTypeOK,weakness,canBreak,canControl,canRepeat,gradeCap,label,note};
 }
 
 export class StallEngine{
