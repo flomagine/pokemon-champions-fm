@@ -141,7 +141,7 @@ export function analyzeEnemyTeam(team,megaName='',model=null){
   const {targets,principles}=genericBreakPrinciples(primary,features,keyTargets);
   const roleSummary=keyTargets.slice(0,5).map(roleText).join(' / ');
   const note=`<b>역할 구조:</b> ${roleSummary}<br><b>해체 우선순위:</b> ${targets||'역할 공개 후 결정'}<br><b>파훼 원칙:</b> ${principles.join(' · ')||'개별 대면과 선봉 복구를 우선'}<br><small>아키타입 신뢰 ${confidence}; 역할이 불명확한 포켓몬은 확정하지 않습니다.</small>`;
-  return{primary,name:ARCHETYPE_LABELS[primary],secondary:secondary.map(key=>ARCHETYPE_LABELS[key]),scores,features,rows,edges,keyTargets,confidence,note,principles};
+  return{primary,name:ARCHETYPE_LABELS[primary],secondary:secondary.map(key=>ARCHETYPE_LABELS[key]),scores,features,rows:keyTargets,edges,keyTargets,confidence,note,principles};
 }
 
 export function ownToolProfile(id){
@@ -173,9 +173,28 @@ function primaryRole(row){
   return Object.entries(row.roles).sort((a,b)=>b[1]-a[1])[0]?.[0]||'unknown';
 }
 
+export function statusPlanFor(row,tools,hasDenial=false){
+  const moves=row.moves||[],typeControl=(row.sustain?.typeControlRate||0)>=.5;
+  const toxic=moves.some(move=>['맹독','독가루','독압정'].includes(move));
+  const burn=moves.some(move=>['도깨비불','열탕'].includes(move));
+  const sleep=moves.some(move=>['하품','수면가루','버섯포자','최면술'].includes(move));
+  const paralysis=moves.some(move=>['전기자석파','뱀눈초리'].includes(move));
+  const hasPivot=tools.some(tool=>(tool.pivot||[]).length);
+  const toxicCovered=tools.some(tool=>tool.toxicImmune)&&!typeControl;
+  const burnCovered=tools.some(tool=>(tool.types||[]).includes('불꽃')||tool.special);
+  const paralysisCovered=tools.some(tool=>(tool.types||[]).includes('전기')||(tool.types||[]).includes('땅'));
+  let severity=0;const reasons=[];
+  if(toxic&&!toxicCovered&&!hasDenial){severity+=3;reasons.push(typeControl?'타입 변경 뒤 맹독에 노출':'맹독 내성·제어 수단 없음')}
+  if(sleep&&!hasDenial){if(hasPivot){severity+=1.1;reasons.push('피벗으로 수면은 피하지만 함정·교체 손해가 누적')}else{severity+=3;reasons.push('하품·수면 강제교체를 끊을 수단 없음')}}
+  if(burn&&!burnCovered&&!hasDenial){severity+=2.5;reasons.push('화상으로 물리 돌파축이 무력화')}
+  if(paralysis&&!paralysisCovered&&!hasDenial){severity+=1.8;reasons.push('마비 속도 제어 대책 없음')}
+  const covered=severity<2.5,partial=severity>0&&covered;
+  return{covered,partial,severity,reason:reasons.join(' · ')||'상태이상 대응 가능',toxic,burn,sleep,paralysis,typeControl};
+}
+
 export function evaluateTeamCounterPlan(team,combo,lead,model,megaName=''){
   const analysis=model?.teamAnalysis||analyzeEnemyTeam(team,megaName,model);
-  const tools=combo.map(ownToolProfile),hasRemoval=tools.some(x=>x.removal.length),hasHazard=tools.some(x=>x.hazard.length),hasDenial=tools.some(x=>x.denial.length),hasToxicImmune=tools.some(x=>x.toxicImmune);
+  const tools=combo.map(ownToolProfile),hasRemoval=tools.some(x=>x.removal.length),hasHazard=tools.some(x=>x.hazard.length),hasDenial=tools.some(x=>x.denial.length);
   let penalty=0,reward=0;
   const warnings=[],hardGaps=[],missions={};combo.forEach(id=>missions[id]=[]);
   const priority=[];
@@ -183,7 +202,6 @@ export function evaluateTeamCounterPlan(team,combo,lead,model,megaName=''){
     const prob=model?.probs?.[row.p.name]??1/team.length;
     if(prob<.12)continue;
     const mega=(DATA.megaOptions[row.p.name]||[]).includes(megaName)?megaName:'';
-    const majorRoles=Object.entries(row.roles).filter(([,score])=>score>=.55).sort((a,b)=>b[1]-a[1]);
     let targetPriority=row.centrality||0;
     if((row.roles.recoveryWall||0)>=.55){
       const gap=sustainGapForCombo(combo,row.p,mega);
@@ -202,16 +220,21 @@ export function evaluateTeamCounterPlan(team,combo,lead,model,megaName=''){
     if((row.roles.antiSetup||0)>=.55&&combo.includes('mimi')){
       const helper=combo.filter(id=>id!=='mimi').map(id=>({id,g:matchupGrade(row.p,id,mega),bp:wallBreakPressure(row.p,id,mega)})).sort((a,b)=>b.g-a.g||b.bp.score-a.bp.score)[0];
       if(!helper||helper.g<3){penalty+=prob*6;hardGaps.push(`${row.p.name}: 따라큐 전개 차단자를 먼저 제거할 카드 없음`)}else{reward+=prob;warnings.push(`${row.p.name} 제거 전 따라큐 칼춤 금지`)}
-      targetPriority+=combo.includes('mimi')?3:0;
+      targetPriority+=3;
     }
     if((row.roles.hazardSetter||0)>=.55&&!hasRemoval){
       const leadPressure=directGrade(row.p,lead,mega),teamPressure=Math.max(...combo.map(id=>directGrade(row.p,id,mega)));
       if(leadPressure<3&&teamPressure<4){penalty+=prob*4.5;warnings.push(`${row.p.name}: 함정 제거가 없고 초반 압박도 약함—교체 누적 손해`);targetPriority+=2.2}else{reward+=prob*.6;warnings.push(`${row.p.name}: 제거 대신 초반 압박으로 함정 턴을 차단`)}
     }
-    if((row.roles.statusSpreader||0)>=.55&&!hasToxicImmune&&!hasDenial){penalty+=prob*3.5;warnings.push(`${row.p.name}: 상태이상 장기전 대책 없음`);targetPriority+=1.2}
+    if((row.roles.statusSpreader||0)>=.55||(row.roles.sleepForcer||0)>=.55){
+      const statusPlan=statusPlanFor(row,tools,hasDenial);
+      if(!statusPlan.covered){penalty+=prob*(2.5+statusPlan.severity*.55);warnings.push(`${row.p.name}: ${statusPlan.reason}`);targetPriority+=1.2+statusPlan.severity*.25}
+      else if(statusPlan.partial){penalty+=prob*1.2;warnings.push(`${row.p.name}: ${statusPlan.reason}`);targetPriority+=.5}
+      else reward+=prob*.4;
+    }
     if((row.roles.trapper||0)>=.55){warnings.push(`${row.p.name}: 수동 포켓몬을 대면시키면 교체 봉쇄 가능`);targetPriority+=1}
     const role=primaryRole(row),owner=bestMissionOwner(row,combo,mega,role);
-    if(owner){missions[owner.id].push({p:row.p,role,prob,score:owner.score});}
+    if(owner)missions[owner.id].push({p:row.p,role,prob,score:owner.score});
     priority.push({...row,priority:targetPriority,prob});
   }
   if(analysis.features.regen>=1.3){
