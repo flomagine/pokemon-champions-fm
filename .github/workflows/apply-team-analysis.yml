@@ -1,0 +1,50 @@
+name: Apply team archetype analysis
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/apply-team-analysis.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Integrate team-aware selection engine
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('src/core/team-analysis-engine.js')
+          text=path.read_text(encoding='utf-8')
+          old="abilities.has('shadow-tag')||abilities.has('arena-trap')?.95:.68"
+          new="(abilities.has('shadow-tag')||abilities.has('arena-trap'))?.95:.68"
+          if old not in text:
+              raise SystemExit('trapper expression target not found')
+          path.write_text(text.replace(old,new,1),encoding='utf-8')
+
+          path=Path('src/ui/simulator-app.js')
+          text=path.read_text(encoding='utf-8')
+          old="../core/selection-engine-v2.js"
+          new="../core/selection-engine-v3.js"
+          if old not in text:
+              raise SystemExit('UI selection import target not found')
+          path.write_text(text.replace(old,new,1),encoding='utf-8')
+          PY
+      - name: Check syntax
+        run: find src -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Run regression tests
+        run: npm test
+      - name: Commit integrated source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/core/team-analysis-engine.js src/ui/simulator-app.js
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Integrate team archetype and counter-plan engine'
+          git push
