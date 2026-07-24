@@ -2,7 +2,7 @@
 // Bellibolt snapshot: OP.GG Pokémon Champions single battle, updated 2026-07-24 11:30 KST.
 
 export const RELIABLE_RECOVERY_MOVES=new Set([
-  '게으름피우기','HP회복','알낳기','날개쉬기','달의불빛','아침햇살','광합성','우유마시기','치유소원','힘흡수'
+  '게으름피우기','HP회복','알낳기','날개쉬기','달의불빛','아침햇살','광합성','우유마시기','힘흡수'
 ]);
 
 export const DRAIN_RECOVERY_MOVES=new Set([
