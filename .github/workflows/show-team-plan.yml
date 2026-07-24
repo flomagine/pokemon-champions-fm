@@ -1,0 +1,49 @@
+name: Display team counter-plan phases
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/show-team-plan.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Add team plan rendering
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('src/ui/simulator-app.js')
+          text=path.read_text(encoding='utf-8')
+          marker=" let preserve=[],avoid=[];"
+          addition=""" if(top.teamPlan?.phases?.length){
+  $('phases').innerHTML=top.teamPlan.phases.map((text,i)=>`<div class=\"phase\"><b>${['구조 확인','핵심 해체','승리축 실행'][i]||`단계 ${i+1}`}</b><p>${text}</p></div>`).join('');
+  const structureWarnings=(top.teamPlan.warnings||[]).slice(0,3).join(' / ');
+  $('order').innerHTML+=`<br><strong>상대 구조 해체:</strong> ${top.teamPlan.summary}${structureWarnings?`<br><strong>구조 경고:</strong> ${structureWarnings}`:''}`;
+ }
+"""
+          if marker not in text:
+              raise SystemExit('render marker not found')
+          if '상대 구조 해체:' not in text:
+              text=text.replace(marker,addition+marker,1)
+          path.write_text(text,encoding='utf-8')
+          PY
+      - name: Check and test
+        run: |
+          find src -name '*.js' -print0 | xargs -0 -n1 node --check
+          npm test
+      - name: Commit UI
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/ui/simulator-app.js
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Show team roles and counter-plan phases'
+          git push
